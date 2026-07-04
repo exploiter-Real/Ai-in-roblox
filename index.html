@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groq Roblox Companion</title>
+    <style>
+        body { font-family: sans-serif; background: #0f0f12; color: #fff; text-align: center; padding: 20px; margin: 0; }
+        .wrapper { max-width: 450px; margin: 30px auto; background: #1a1a24; padding: 25px; border-radius: 16px; border: 1px solid #2d2d3d; }
+        input[type="text"], input[type="file"] { margin: 12px 0; background: #252538; padding: 12px; width: 100%; border-radius: 8px; border: none; color: white; box-sizing: border-box; }
+        .key-section { background: #222230; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px dashed #3b82f6; }
+        button { background: #3b82f6; color: white; border: none; padding: 14px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #2563eb; }
+        .btn-secondary { background: #4b5563; }
+        .btn-secondary:hover { background: #374151; }
+        #responseBox { margin-top: 20px; padding: 15px; background: #222230; border-left: 4px solid #3b82f6; border-radius: 6px; text-align: left; word-wrap: break-word; }
+        #imgPreview { max-width: 100%; border-radius: 8px; display: none; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <h2>Groq Client Hub</h2>
+    <p style="color: #a0a0b0; font-size: 14px;">Direct connection to Groq Vision via GitHub Pages</p>
+    
+    <!-- API Key Section -->
+    <div id="keySection" class="key-section">
+        <label for="apiKeyInput" style="font-size: 14px; display:block; text-align:left; margin-bottom:5px;">Enter Groq API Key:</label>
+        <input type="text" id="apiKeyInput" placeholder="gsk_...">
+        <button onclick="saveApiKey()">Save Key to Device</button>
+    </div>
+    
+    <div id="activeSection" style="display: none;">
+        <p style="color: #10b981; font-size: 14px; font-weight: bold;">✅ API Key Loaded from Memory</p>
+        <input type="file" id="fileSelector" accept="image/*">
+        <img id="imgPreview">
+        <button onclick="sendToGroq()">Get Groq Analysis</button>
+        <button class="btn-secondary" onclick="clearApiKey()">Forget API Key</button>
+    </div>
+    
+    <div id="responseBox">Awaiting configuration or screenshot...</div>
+</div>
+
+<script>
+    const keySection = document.getElementById('keySection');
+    const activeSection = document.getElementById('activeSection');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const fileSelector = document.getElementById('fileSelector');
+    const imgPreview = document.getElementById('imgPreview');
+    const responseBox = document.getElementById('responseBox');
+
+    // Automatically check for saved key when page loads
+    window.onload = function() {
+        const savedKey = localStorage.getItem('groq_api_key');
+        if (savedKey) {
+            showActiveInterface();
+        }
+    };
+
+    function saveApiKey() {
+        const key = apiKeyInput.value.trim();
+        if (!key) {
+            alert("Please enter a valid key!");
+            return;
+        }
+        localStorage.setItem('groq_api_key', key);
+        showActiveInterface();
+        responseBox.innerText = "Key saved successfully! Ready for your screenshots.";
+    }
+
+    function clearApiKey() {
+        localStorage.removeItem('groq_api_key');
+        keySection.style.display = 'block';
+        activeSection.style.display = 'none';
+        apiKeyInput.value = '';
+        imgPreview.style.display = 'none';
+        fileSelector.value = '';
+        responseBox.innerText = "API key cleared from memory.";
+    }
+
+    function showActiveInterface() {
+        keySection.style.display = 'none';
+        activeSection.style.display = 'block';
+    }
+
+    fileSelector.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = e => { 
+                imgPreview.src = e.target.result; 
+                imgPreview.style.display = 'block'; 
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    async function sendToGroq() {
+        const file = fileSelector.files[0];
+        const apiKey = localStorage.getItem('groq_api_key');
+        
+        if (!apiKey) { alert("API Key missing!"); return; }
+        if (!file) { responseBox.innerText = "Please choose a screenshot first!"; return; }
+
+        responseBox.innerText = "Processing image and contacting Groq servers...";
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = async () => {
+            const base64String = reader.result.split(',')[1]; // Get structural base64 data
+
+            try {
+                // Direct browser call to Groq's endpoint
+                const res = await fetch("https://groq.com", {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.2-11b-vision-preview", // Lightning fast vision model
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: "You are a competitive Roblox companion for 'Build a Boat for Treasure'. Analyze this gameplay screenshot. Give me exactly 1 punchy sentence of raw mechanical building optimization strategy, mechanical advice, or gameplay roasting." },
+                                    { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64String}` } }
+                                ]
+                            }
+                        ],
+                        max_tokens: 80
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.choices && data.choices[0]) {
+                    responseBox.innerHTML = `<strong>Groq:</strong> ${data.choices[0].message.content}`;
+                } else if (data.error) {
+                    responseBox.innerText = `API Error: ${data.error.message}`;
+                } else {
+                    responseBox.innerText = "Unknown response structure from API.";
+                }
+            } catch (err) {
+                responseBox.innerText = "Failed to connect directly to Groq. Check your internet connection or API limits.";
+                console.error(err);
+            }
+        };
+    }
+</script>
+</body>
+</html>
